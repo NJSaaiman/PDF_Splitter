@@ -1,15 +1,12 @@
-﻿using System;
+﻿using iTextSharp.text;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.Remoting.Messaging;
-using System.Text;
-using iTextSharp.text.pdf;
-using iTextSharp.text;
-using iTextSharp.text.pdf.parser;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Globalization;
 
 
 namespace PDF_Splitter
@@ -67,7 +64,7 @@ namespace PDF_Splitter
 
                     PdfImportedPage importedPage = pdfCopyProvider.GetImportedPage(reader, currentPage);
                     pdfCopyProvider.AddPage(importedPage);
-                    
+
                     //if (docs[docIndex].Item2.Length > 2000000)
                     //{
                     //}
@@ -100,7 +97,7 @@ namespace PDF_Splitter
         public static void MergePDFs(string outPutFilePath, params string[] filesPath)
         {
             List<PdfReader> readerList = new List<PdfReader>();
-            foreach (string filePath in filesPath.OrderBy(x=>x))
+            foreach (string filePath in filesPath.OrderBy(x => x))
             {
                 PdfReader pdfReader = new PdfReader(filePath);
                 PdfReader.unethicalreading = true;
@@ -112,7 +109,7 @@ namespace PDF_Splitter
             //Create blank output pdf file and get the stream to write on it.
             PdfWriter writer = PdfWriter.GetInstance(document, new FileStream(outPutFilePath, FileMode.Create));
             writer.PdfVersion = PdfWriter.VERSION_1_5;
-            
+
             writer.SetFullCompression();
 
             document.Open();
@@ -122,11 +119,11 @@ namespace PDF_Splitter
                 for (int i = 1; i <= reader.NumberOfPages; i++)
                 {
                     PdfImportedPage page = writer.GetImportedPage(reader, i);
-                    
+
                     document.Add(iTextSharp.text.Image.GetInstance(page));
                 }
             }
-            
+
 
             document.Close();
         }
@@ -142,13 +139,13 @@ namespace PDF_Splitter
                 // Intialize a new PdfReader instance with the contents of the source Pdf file:
                 reader = new PdfReader(sourcePdfPath);
 
-                int docIndex = 0;
+                int docIndex = 1;
                 int currentPage = 0;
                 int pageCounter = 0;
                 for (int i = 0; i < reader.NumberOfPages; i++)
                 {
                     currentPage = i + 1;
-                    
+
                     Document document;
                     FileStream fs;
                     PdfSmartCopy pdfCopyProvider;
@@ -170,23 +167,35 @@ namespace PDF_Splitter
                             docIndex++;
                             document = new Document(reader.GetPageSizeWithRotation(currentPage));
                             string fileName = GetTextFromPDF(reader, docIndex);
-                            fs = new FileStream(Path.Combine(outputPdfPath, fileName + ".pdf"), System.IO.FileMode.Create);
-                            pdfCopyProvider = new PdfSmartCopy(document, fs);
-                            pdfCopyProvider.SetFullCompression();
-                            document.Open();
-                            docs.Add(docIndex, new Tuple<Document, FileStream, PdfSmartCopy>(document, fs, pdfCopyProvider));
+                            string destinationPath = Path.Combine(outputPdfPath, fileName + ".pdf");
+                            if (!File.Exists(destinationPath))
+                            {
+                                fs = new FileStream(destinationPath, System.IO.FileMode.Create);
+                                pdfCopyProvider = new PdfSmartCopy(document, fs);
+                                pdfCopyProvider.SetFullCompression();
+                                document.Open();
+                                docs.Add(docIndex, new Tuple<Document, FileStream, PdfSmartCopy>(document, fs, pdfCopyProvider));
+                            }
+                            else
+                            {
+                                pdfCopyProvider = null;
+                            }
+                           
                             pageCounter = 1;
                         }
                         else
                         {
                             pdfCopyProvider = docs[docIndex].Item3;
                             pageCounter++;
-                            
+
                         }
                     }
 
-                    PdfImportedPage importedPage = pdfCopyProvider.GetImportedPage(reader, currentPage);
-                    pdfCopyProvider.AddPage(importedPage);
+                    if (pdfCopyProvider != null)
+                    {
+                        PdfImportedPage importedPage = pdfCopyProvider.GetImportedPage(reader, currentPage);
+                        pdfCopyProvider.AddPage(importedPage);
+                    }
                 }
 
                 foreach (Tuple<Document, FileStream, PdfSmartCopy> i in docs.Values)
@@ -211,12 +220,12 @@ namespace PDF_Splitter
                 ITextExtractionStrategy strategy = new SimpleTextExtractionStrategy();
 
                 string currentPageText = PdfTextExtractor.GetTextFromPage(reader, page, strategy);
-                string fName = Regex.Match(currentPageText, "(?<=(EMP.NAME:|WKN.NAAM:)).*(?=(DT ENGAGED:|INTREEDATUM:))", RegexOptions.IgnoreCase | RegexOptions.Multiline).Captures[0].Value.Trim();
+                string fName = Regex.Match(currentPageText, @"(?<=guid.*\S).*", RegexOptions.IgnoreCase | RegexOptions.Multiline).Captures[0].Value.Trim();
+                return fName;
+                //CultureInfo cultureInfo = CultureInfo.InvariantCulture;
+                //TextInfo textInfo = cultureInfo.TextInfo;
 
-                CultureInfo cultureInfo = CultureInfo.InvariantCulture;
-                TextInfo textInfo = cultureInfo.TextInfo;
-
-                return textInfo.ToTitleCase(fName.ToLowerInvariant());
+                //return textInfo.ToTitleCase(fName.ToLowerInvariant());
             }
             catch (Exception)
             {
